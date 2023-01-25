@@ -4,6 +4,7 @@ import com.example.uptimeChecker.DTO.EmailDetailsDTO;
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import com.example.uptimeChecker.Entities.User;
 import com.example.uptimeChecker.Repositories.WebsiteDetailsRepository;
+import com.example.uptimeChecker.Repositories.WebsiteUserMetaDataRepository;
 import com.example.uptimeChecker.constants.RabbitmqConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,12 +18,11 @@ import java.util.Set;
 
 @Service
 public class EmailNotificationServiceImpl implements EmailNotificationService {
-
+    @Autowired
+    private WebsiteDetailsRepository websiteDetailsRepository;
     @Autowired
     private EmailService emailService;
 
-    @Autowired
-    private WebsiteDetailsRepository websiteDetailsRepository;
     @Autowired
     private AmqpTemplate amqpTemplate;
 
@@ -56,7 +56,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     public String sendMessageToUsers(WebsiteDetailsDTO websiteDetailsDTO)  {
         Set<User> users= new HashSet<>();
         users.add(new User("risha","", true, "rishanaznin@gmail.com",""));
-                //websiteDetailsRepository.findUserByWebId(websiteDetailsDTO.getWebId());
+        //users =websiteDetailsRepository.findUserByWebId(websiteDetailsDTO.getWebId());
         EmailDetailsDTO emailDetailsDTO;
         if(users!=null){
             for(User user: users){

@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface WebsiteUserMetaDataRepository extends JpaRepository<WebsiteUserMetaData, WebsiteUserMetaData_PK> {
-    public boolean existsByWebsiteUserMetaDataPkWbId(Integer wbId);
+     boolean existsByWebsiteUserMetaDataPkWbId(Integer wbId);
 
 }

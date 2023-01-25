@@ -1,6 +1,8 @@
 package com.example.uptimeChecker.Controller;
 
+import com.example.uptimeChecker.DTO.DownTimeSummaryDTO;
 import com.example.uptimeChecker.DTO.WebsiteDetailsWithMetaDataDTO;
+import com.example.uptimeChecker.Service.DowntimeService;
 import com.example.uptimeChecker.Service.WebsiteUserService;
 import com.example.uptimeChecker.constants.RestEndpoints;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +17,9 @@ import java.util.Set;
 public class WebsiteUserController {
     @Autowired
     private WebsiteUserService websiteUserService;
+    @Autowired
+    private DowntimeService downtimeService;
+
 
     @GetMapping(RestEndpoints.USER_WEBSITE_LIST)
     public ResponseEntity<Set<WebsiteDetailsWithMetaDataDTO>> getWebsitesByUser(@PathVariable Integer userId){
@@ -25,7 +30,7 @@ public class WebsiteUserController {
         return ResponseEntity.ok(websiteUserService.saveWebsite(websiteDetailsWithMetaData,true )) ;
     }
     @DeleteMapping(RestEndpoints.REMOVE_WEBSITE)
-    public ResponseEntity removeWebsite(@PathVariable Integer userId, @PathVariable Integer webId){
+    public ResponseEntity<?> removeWebsite(@PathVariable Integer userId, @PathVariable Integer webId){
         websiteUserService.removeWebsite(userId,webId);
         return ResponseEntity.status(HttpStatus.OK).build();
     }
@@ -42,6 +47,9 @@ public class WebsiteUserController {
         return ResponseEntity.ok().build() ;
     }
 
-
+    @GetMapping(RestEndpoints.WEBSITE_DOWNTIME_HISTORY)
+    public ResponseEntity<Set<DownTimeSummaryDTO>> getWebsiteDayWiseDownTimeHistory(@PathVariable Integer webId){
+        return  ResponseEntity.status(HttpStatus.OK).body(downtimeService.getDayWiseDownTimeHistory(webId));
+    }
 
 }

@@ -44,6 +44,8 @@ public class CheckUptime {
 
     private Integer schedulerPeriod;
     private Integer maxFailCount;
+
+    private  TimeUnit timeUnit;
     public CheckUptime(  @Value("${rescheduler.poolsize}") String reschedulerPoolSize,
                          @Value("${scheduler.poolsize}") String schedulerPoolSize,
                          @Value("${scheduler.period}") String  schedulerPeriod,
@@ -51,17 +53,26 @@ public class CheckUptime {
          schedulerExecutorService = new CustomThreadPoolTaskScheduler(Integer.parseInt(schedulerPoolSize));
          reschedulerExecutorService = Executors.newFixedThreadPool(Integer.parseInt(reschedulerPoolSize));
          this.schedulerPeriod=Integer.parseInt(schedulerPeriod);
-         this.maxFailCount=Integer.parseInt(maxFailCount);;
+         this.maxFailCount=Integer.parseInt(maxFailCount);
+         this.timeUnit=TimeUnit.SECONDS;
     }
 
     //region public method
     @PostConstruct
     public void init() {
         try {
+            updateEndOfDowntime();
             broadcastWebsiteUptimeData();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    //At Application startup. check if any row exist where end time is not updated.
+    //if found then update the end time assuming that the website was up when our application was down.
+    //calculates approx downtime from the fail count and update end time.
+    private void updateEndOfDowntime() {
+        downtimeService.updateEndOfDowntime(timeUnit,schedulerPeriod);
     }
 
     /*
@@ -75,7 +86,7 @@ public class CheckUptime {
             System.out.println(delay + "delay");
             schedulerExecutorService.scheduleAtFixedRate(() -> {
                 checkAvailability(websiteDetailsDTO);
-            }, delay, this.schedulerPeriod, TimeUnit.SECONDS, websiteDetailsDTO.getWebId(), websiteDetailsDTO.getUrl());
+            }, delay, this.schedulerPeriod, timeUnit, websiteDetailsDTO.getWebId(), websiteDetailsDTO.getUrl());
         });
 
     }
@@ -122,7 +133,7 @@ public class CheckUptime {
                     websiteDetailsDTOFromMap.setFailCount(0);// resetting fail count
                     websiteDetailsDTOFromMap.setTotalConsecutiveFailCount(0);//resetting consecutive total fail count
 
-                    System.out.println(scheduledTasksMap.get(websiteDetailsDTO.getWebId()).getFuture().getDelay(TimeUnit.SECONDS));
+                    System.out.println(scheduledTasksMap.get(websiteDetailsDTO.getWebId()).getFuture().getDelay(timeUnit));
                 }
                 broadcastData(websiteDetailsDTO, false);
                 return true;
@@ -188,11 +199,15 @@ public class CheckUptime {
     }
 
 
-
     private Integer calculateBackOffTime(int failCount) {
-        if (failCount == 0) return schedulerPeriod*2;
-        return (int) (failCount*Math.pow(2,failCount));
+        if (failCount == 0) return 0;
+        else{
+            failCount=failCount-1;
+            return (int) (schedulerPeriod*Math.pow(2,failCount));
+        }
+
     }
+
 
 
     private void broadcastData(WebsiteDetailsDTO websiteDetailsDTO, boolean isDown) throws InterruptedException {

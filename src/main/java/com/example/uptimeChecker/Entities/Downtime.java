@@ -2,12 +2,11 @@ package com.example.uptimeChecker.Entities;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 
 import javax.persistence.*;
 import java.math.BigInteger;
-import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.Date;
 
 @Entity
 @Table(name = "downtime_info")
@@ -24,17 +23,24 @@ public class Downtime {
     private Integer webId;
 
     @Column(name = "dt_start_time")
-    private OffsetDateTime startTime;
+    private OffsetTime startTime;
 
     @Column(name = "dt_end_time")
-    private OffsetDateTime endTime;
+    private OffsetTime endTime;
 
-    public Downtime(Integer webId, OffsetDateTime startTime) {
+    @Column(name = "dt_date")
+    private Date date;
+
+    @Column(name = "dt_fail_count")
+    private Integer totalFailCount;
+    public Downtime(Integer webId, OffsetTime startTime, Date date, Integer totalFailCount) {
         this.webId = webId;
         this.startTime = startTime;
+        this.date=date;
+        this.totalFailCount=totalFailCount;
     }
 
-    public Downtime(Integer webId, OffsetDateTime startTime, OffsetDateTime endTime) {
+    public Downtime(Integer webId, OffsetTime startTime, OffsetTime endTime) {
         this.webId = webId;
         this.startTime = startTime;
         this.endTime = endTime;

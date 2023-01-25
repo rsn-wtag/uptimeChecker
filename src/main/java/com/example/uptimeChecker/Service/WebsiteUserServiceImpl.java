@@ -42,9 +42,8 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
     private CheckUptime checkUptime;
 
 
-
-
     public Set<WebsiteDetailsWithMetaDataDTO> getWebsiteDetailsByUser(Integer userId) {
+
         Set<WebsiteDetailsWithMetaDataDTO> websiteSet= new HashSet<>();
         WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO;
 
@@ -89,6 +88,7 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
 
     @Override
     public WebsiteDetailsWithMetaDataDTO getWebsite(Integer userId, Integer webId) {
+
        if( websiteUserMetaDataRepository.findById(new WebsiteUserMetaData_PK(userId, webId)).isPresent()){
             WebsiteUserMetaData websiteUserMetaData= websiteUserMetaDataRepository.findById(new WebsiteUserMetaData_PK(userId, webId)).get();
             WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO= new WebsiteDetailsWithMetaDataDTO();
@@ -166,6 +166,7 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
             }
         }
     }
+
 
     private static WebsiteUserMetaData convertToWebsiteDetailsMetaData(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaData, WebsiteDetails websiteDetails) {
         WebsiteUserMetaData websiteUserMetaData;
