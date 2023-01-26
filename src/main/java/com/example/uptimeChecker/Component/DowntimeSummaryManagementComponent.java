@@ -14,13 +14,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.annotation.PostConstruct;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Component
 @EnableScheduling
@@ -46,6 +44,7 @@ public class DowntimeSummaryManagementComponent {
       Date currentDate=  c.getTime();
       OffsetTime todayEndTime=OffsetTime.now().withHour(23).withMinute(59).withSecond(59);
       OffsetTime nextDayStartTime=OffsetTime.now().withHour(0).withMinute(0).withSecond(0);
+
         //get all of them whose end time is not yet updated.
         //update their end time. and insert another row with tomorrow  and start time as 00:00:00
         Set<Downtime> downtimeSet=  downtimeRepository.findByDateAndEndTimeGreaterThanStartTime(currentDate);
@@ -53,9 +52,17 @@ public class DowntimeSummaryManagementComponent {
             downtime= downtimeRepository.findById(downtime.getDownTimeId()).get();
             //re checking if end of  downtime is updated or not
             if(downtime.getEndTime()==null){
+                //if not then just set endtime to null for new row
                 downtime.setEndTime(todayEndTime);
                 downtimeRepository.save(downtime);
                 Downtime newDowntime= new Downtime(downtime.getWebId(), nextDayStartTime,nextDate,0);
+                downtimeRepository.save(newDowntime);
+            }else{
+                //if yes then insert new row with previous end time
+                OffsetTime endTime= downtime.getEndTime();
+                downtime.setEndTime(todayEndTime);
+                downtimeRepository.save(downtime);
+                Downtime newDowntime= new Downtime(downtime.getWebId(), nextDayStartTime,endTime,nextDate);
                 downtimeRepository.save(newDowntime);
             }
         }
@@ -71,7 +78,21 @@ public class DowntimeSummaryManagementComponent {
       }
     }
 
-
+    public boolean executeEndOfDayTaskForMissedScheduler(){
+        Downtime lastDowntimeInfo=downtimeRepository.findFirstByOrderByDateDesc();
+       if ( lastDowntimeInfo!=null && !lastDowntimeInfo.getDate().equals(new Date())){
+           //if down time info has previous date data then scheduler has been missed
+         List<WebsiteDetailsDTO> websiteDetailsList= websiteService.getWesiteDetailList();
+          if(websiteDetailsList.size()>0){
+             downtimeRepository.updateAllNullEndTime(OffsetTime.now().withHour(23).withMinute(59).withSecond(59));
+              for( WebsiteDetailsDTO websiteDetailsDTO:websiteDetailsList){
+                  calculateAndSaveDowntimeSummary(websiteDetailsDTO.getWebId(), lastDowntimeInfo.getDate());
+              }
+          }
+          return true;
+       }
+       return false;
+    }
     void calculateAndSaveDowntimeSummary(Integer webId, Date date){
       Set<Downtime> DowntimeSet= downtimeRepository.findByDateAndWebId(date, webId);
       long downtimeInSecond =0;

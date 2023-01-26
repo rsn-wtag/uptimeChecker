@@ -1,5 +1,6 @@
 package com.example.uptimeChecker.Service;
 
+import com.example.uptimeChecker.DTO.DownTimeDTO;
 import com.example.uptimeChecker.DTO.DownTimeSummaryDTO;
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import com.example.uptimeChecker.Entities.Downtime;
@@ -11,6 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -64,6 +67,7 @@ public class DowntimeServiceImpl implements DowntimeService {
     }
     @Override
     public Set<DownTimeSummaryDTO> getDayWiseDownTimeHistory(Integer webId){
+
        Set<DowntimeSummary> downtimeSummarySet= downtimeSummaryRepository.findDowntimeSummariesByDowntimeSummaryPkWebId(webId);
        Set<DownTimeSummaryDTO> downTimeSummaryDTOS= new HashSet<>();
        DownTimeSummaryDTO downTimeSummaryDTO= new DownTimeSummaryDTO();
@@ -76,6 +80,18 @@ public class DowntimeServiceImpl implements DowntimeService {
           ));
       });
        return downTimeSummaryDTOS;
+    }
+
+    @Override
+    public Set<DownTimeDTO> getTodayDownTimeHistory(Integer webId) {
+        Set<DownTimeDTO> downTimeDTOS= new HashSet<>();
+
+       downtimeRepository.findByDateAndWebId(new Date(), webId).forEach(downtime -> {
+           Date startTime=  Date.from(downtime.getStartTime().atDate(LocalDate.now()).toInstant());
+           Date endTime=  Date.from(downtime.getEndTime().atDate(LocalDate.now()).toInstant());
+           downTimeDTOS.add(new DownTimeDTO(downtime.getDownTimeId(), downtime.getWebId(),startTime, endTime, downtime.getDate(), downtime.getTotalFailCount()));
+       });
+       return  downTimeDTOS;
     }
 
     //calculates approx downtime from failCount with the same logic which is used to calculate back off time

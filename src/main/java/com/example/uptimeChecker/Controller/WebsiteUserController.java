@@ -1,5 +1,6 @@
 package com.example.uptimeChecker.Controller;
 
+import com.example.uptimeChecker.DTO.DownTimeDTO;
 import com.example.uptimeChecker.DTO.DownTimeSummaryDTO;
 import com.example.uptimeChecker.DTO.WebsiteDetailsWithMetaDataDTO;
 import com.example.uptimeChecker.Service.DowntimeService;
@@ -10,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.util.Set;
 
 
@@ -26,8 +28,9 @@ public class WebsiteUserController {
         return  ResponseEntity.status(HttpStatus.OK).body(websiteUserService.getWebsiteDetailsByUser(userId));
     }
     @RequestMapping(RestEndpoints.REGISTER_WEBSITE)
-    public ResponseEntity<?> registerWebsite(@RequestBody WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaData){
-        return ResponseEntity.ok(websiteUserService.saveWebsite(websiteDetailsWithMetaData,true )) ;
+    public ResponseEntity<?> registerWebsite(@Valid @RequestBody WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaData){
+        websiteUserService.saveWebsite(websiteDetailsWithMetaData,true );
+        return ResponseEntity.ok().build() ;
     }
     @DeleteMapping(RestEndpoints.REMOVE_WEBSITE)
     public ResponseEntity<?> removeWebsite(@PathVariable Integer userId, @PathVariable Integer webId){
@@ -42,7 +45,7 @@ public class WebsiteUserController {
     }
 
     @RequestMapping(RestEndpoints.UPDATE_WEBSITE)
-    public ResponseEntity<?> updateWebsite(@RequestBody WebsiteDetailsWithMetaDataDTO websiteDetails){
+    public ResponseEntity<?> updateWebsite(@Valid @RequestBody WebsiteDetailsWithMetaDataDTO websiteDetails){
         websiteUserService.updateUserWebsiteInfo(websiteDetails);
         return ResponseEntity.ok().build() ;
     }
@@ -50,6 +53,11 @@ public class WebsiteUserController {
     @GetMapping(RestEndpoints.WEBSITE_DOWNTIME_HISTORY)
     public ResponseEntity<Set<DownTimeSummaryDTO>> getWebsiteDayWiseDownTimeHistory(@PathVariable Integer webId){
         return  ResponseEntity.status(HttpStatus.OK).body(downtimeService.getDayWiseDownTimeHistory(webId));
+    }
+
+    @GetMapping(RestEndpoints.WEBSITE_DOWNTIME_HISTORY_TODAY)
+    public ResponseEntity<Set<DownTimeDTO>> getWebsiteDownTimeHistoryToday(@PathVariable Integer webId){
+        return  ResponseEntity.status(HttpStatus.OK).body(downtimeService.getTodayDownTimeHistory(webId));
     }
 
 }

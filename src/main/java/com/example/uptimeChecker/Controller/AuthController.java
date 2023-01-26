@@ -6,14 +6,18 @@ import com.example.uptimeChecker.DTO.UserLoginRequestDTO;
 import com.example.uptimeChecker.DTO.UserSignUpRequestDTO;
 import com.example.uptimeChecker.Entities.Role;
 import com.example.uptimeChecker.Entities.User;
+import com.example.uptimeChecker.Exceptions.CustomException;
+import com.example.uptimeChecker.Exceptions.ErrorMessage;
 import com.example.uptimeChecker.Repositories.UserRepository;
 import com.example.uptimeChecker.Util.CookieUtil;
 import com.example.uptimeChecker.security.jwt.JwtUtils;
 import com.sun.xml.internal.fastinfoset.util.CharArray;
+import org.hibernate.validator.internal.constraintvalidators.bv.EmailValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,6 +31,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -78,16 +83,14 @@ public class AuthController {
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody UserSignUpRequestDTO signUpRequest) {
+
         if (userRepository.existsUserByUserName(signUpRequest.getUsername())) {
-            return ResponseEntity
-                    .badRequest()
-                    .body("Error: Username is already taken!");
+            throw new CustomException("error.user.name.exists", HttpStatus.BAD_REQUEST.value());
+
         }
 
         if (userRepository.existsUserByEmail(signUpRequest.getEmail())) {
-            return ResponseEntity
-                    .badRequest()
-                    .body("Error: Email is already in use!");
+            throw new CustomException("error.email.exists", HttpStatus.BAD_REQUEST.value());
         }
 
 

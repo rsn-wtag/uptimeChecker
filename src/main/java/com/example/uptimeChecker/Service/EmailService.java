@@ -5,6 +5,6 @@ import com.example.uptimeChecker.DTO.EmailDetailsDTO;
 
 public interface EmailService {
 
-    String sendSimpleMail(EmailDetailsDTO details);
+    String sendMail(EmailDetailsDTO details);
 
 }

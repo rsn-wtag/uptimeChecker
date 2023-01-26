@@ -2,11 +2,13 @@ package com.example.uptimeChecker.Repositories;
 
 import com.example.uptimeChecker.Entities.Downtime;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigInteger;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.util.Date;
 import java.util.Set;
 
@@ -24,4 +26,10 @@ public interface DowntimeRepository extends JpaRepository<Downtime, BigInteger> 
     Set<Downtime> findByDateAndEndTimeGreaterThanStartTime( Date date);
 
     void deleteByWebIdAndDate(Integer webId, Date date);
+
+    Downtime findFirstByOrderByDateDesc();
+
+    @Modifying
+    @Query("update Downtime set endTime=:endTime where endTime is null")
+    void updateAllNullEndTime(OffsetTime endTime);
 }

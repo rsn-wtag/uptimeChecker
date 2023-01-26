@@ -8,6 +8,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.validation.BindException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -53,11 +55,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = {Exception.class})
     public ResponseEntity<ErrorMessage> serverException(Exception ex) {
         ErrorMessage message = new ErrorMessage(
-                500,
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 new Date(),
                 ex.getMessage(),
                 env.getProperty("error.message"));
 
         return new ResponseEntity<ErrorMessage>(message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    @ExceptionHandler(value = {BindException.class})
+    public ResponseEntity<ErrorMessage> beanValidationException(BindException ex) {
+        ErrorMessage message = new ErrorMessage(
+                HttpStatus.BAD_REQUEST.value(),
+                new Date(),
+                ex.getMessage(),
+                env.getProperty("error.message"));
+
+        return new ResponseEntity<ErrorMessage>(message, HttpStatus.BAD_REQUEST);
     }
 }

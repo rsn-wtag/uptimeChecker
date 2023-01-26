@@ -8,5 +8,6 @@ public class RestEndpoints {
    public static final String USER_WEBSITE_INFO="/website-management/users/{userId}/websites/{webId}";
 
    public static final String WEBSITE_DOWNTIME_HISTORY="/website-management/websites/{webId}/down-time-history";
+   public static final String WEBSITE_DOWNTIME_HISTORY_TODAY="/website-management/websites/{webId}/down-time-history-today";
 
 }

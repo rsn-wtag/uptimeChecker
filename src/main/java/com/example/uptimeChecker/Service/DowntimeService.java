@@ -1,5 +1,6 @@
 package com.example.uptimeChecker.Service;
 
+import com.example.uptimeChecker.DTO.DownTimeDTO;
 import com.example.uptimeChecker.DTO.DownTimeSummaryDTO;
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 
@@ -15,4 +16,5 @@ public interface DowntimeService {
     void updateEndOfDowntime(TimeUnit timeUnit, Integer period);
 
     Set<DownTimeSummaryDTO> getDayWiseDownTimeHistory(Integer webId);
+    Set<DownTimeDTO> getTodayDownTimeHistory(Integer webId);
 }

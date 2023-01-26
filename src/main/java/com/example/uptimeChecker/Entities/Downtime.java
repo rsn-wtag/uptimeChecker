@@ -40,9 +40,10 @@ public class Downtime {
         this.totalFailCount=totalFailCount;
     }
 
-    public Downtime(Integer webId, OffsetTime startTime, OffsetTime endTime) {
+    public Downtime(Integer webId, OffsetTime startTime, OffsetTime endTime, Date date) {
         this.webId = webId;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.date=date;
     }
 }

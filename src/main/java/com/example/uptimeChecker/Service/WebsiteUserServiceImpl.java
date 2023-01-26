@@ -12,8 +12,7 @@ import com.example.uptimeChecker.Exceptions.ResourceNotFoundException;
 import com.example.uptimeChecker.Repositories.UserRepository;
 import com.example.uptimeChecker.Repositories.WebsiteDetailsRepository;
 import com.example.uptimeChecker.Repositories.WebsiteUserMetaDataRepository;
-import com.googlecode.jmapper.JMapper;
-import com.googlecode.jmapper.api.JMapperAPI;
+import org.hibernate.validator.internal.constraintvalidators.bv.EmailValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
@@ -23,8 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.servlet.http.HttpServletResponse;
 import java.util.*;
 
-import static com.googlecode.jmapper.api.JMapperAPI.attribute;
-import static com.googlecode.jmapper.api.JMapperAPI.mappedClass;
+
 
 @Service
 public class WebsiteUserServiceImpl implements WebsiteUserService {
@@ -104,6 +102,7 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
     @Override
     @Transactional
     public String saveWebsite(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO, boolean isRegister) {
+
         WebsiteDetails websiteDetails= new WebsiteDetails();
         WebsiteUserMetaData websiteUserMetaData;
         boolean isNewWebsite=true;
@@ -166,7 +165,6 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
             }
         }
     }
-
 
     private static WebsiteUserMetaData convertToWebsiteDetailsMetaData(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaData, WebsiteDetails websiteDetails) {
         WebsiteUserMetaData websiteUserMetaData;

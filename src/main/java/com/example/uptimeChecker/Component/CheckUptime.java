@@ -41,7 +41,8 @@ public class CheckUptime {
 
     @Autowired
     private EmailNotificationService emailNotificationService;
-
+    @Autowired
+    DowntimeSummaryManagementComponent downtimeSummaryManagementComponent;
     private Integer schedulerPeriod;
     private Integer maxFailCount;
 
@@ -61,7 +62,11 @@ public class CheckUptime {
     @PostConstruct
     public void init() {
         try {
-            updateEndOfDowntime();
+            if(downtimeSummaryManagementComponent.executeEndOfDayTaskForMissedScheduler()) {
+                //if the schedule is missed that method will update the summary table,
+                // so no need to update end time in downtime table
+                updateEndOfDowntime();
+            }
             broadcastWebsiteUptimeData();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
@@ -212,7 +217,7 @@ public class CheckUptime {
 
     private void broadcastData(WebsiteDetailsDTO websiteDetailsDTO, boolean isDown) throws InterruptedException {
         String destination="/dashboard/data/"+websiteDetailsDTO.getWebId();
-        UptimeStatusDTO uptimeStatusDTO= new UptimeStatusDTO(isDown,websiteDetailsDTO.getUrl(), OffsetDateTime.now(), websiteDetailsDTO.getWebId());
+        UptimeStatusDTO uptimeStatusDTO= new UptimeStatusDTO(isDown,websiteDetailsDTO.getUrl(), new Date(), websiteDetailsDTO.getWebId());
         ObjectMapper mapper =  JsonMapper.builder()
                 .addModule(new JavaTimeModule())
                 .build();

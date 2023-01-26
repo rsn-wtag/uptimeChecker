@@ -4,6 +4,7 @@ package com.example.uptimeChecker.Service;
 
 
 import java.io.File;
+import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
@@ -30,19 +31,20 @@ public class EmailServiceImpl implements EmailService {
     private String sender;
 
 
-    public String sendSimpleMail(EmailDetailsDTO details)
+    public String sendMail(EmailDetailsDTO details)
     {
         try {
-            SimpleMailMessage mailMessage= new SimpleMailMessage();
+
+            MimeMessage mimeMessage=javaMailSender.createMimeMessage();
+            MimeMessageHelper mimeMessageHelper= new MimeMessageHelper(mimeMessage, true);
+
+            mimeMessageHelper.setText("",details.getMsgBody());
+            mimeMessageHelper.setFrom(sender);
+            mimeMessageHelper.setTo(details.getRecipient());
+            mimeMessageHelper.setSubject(details.getSubject());
 
 
-            mailMessage.setFrom(sender);
-            mailMessage.setTo(details.getRecipient());
-            mailMessage.setText(details.getMsgBody());
-            mailMessage.setSubject(details.getSubject());
-
-
-            javaMailSender.send(mailMessage);
+            javaMailSender.send(mimeMessage);
             return "Mail Sent Successfully...";
         }
 
