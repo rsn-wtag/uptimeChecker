@@ -82,7 +82,12 @@ public class NotificationServiceImpl implements NotificationService {
                     emailDetailsDTO.setRecipient(user.getEmail());
                     emailDetailsDTO.setSubject("Downtime Alert");
                     emailDetailsDTO.setMsgBody(emailService.createEmailBody(user, websiteDetailsDTO));
-                    sendEmailToRabbitMq(emailDetailsDTO);
+                    try {
+                        sendEmailToRabbitMq(emailDetailsDTO);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        logger.error("Unable to send message to email queue");
+                    }
                 }
                 if(user.getSlackId()!=null && !user.getSlackId().isEmpty()){
                     slackMessageDetailDTO= new SlackMessageDetailDTO();
@@ -91,7 +96,13 @@ public class NotificationServiceImpl implements NotificationService {
                     slackMessageDetailDTO.setMessage(slackMessageService.createSlackMessage(websiteDetailsDTO));
                     slackMessageDetailDTO.setWebhookUrl(user.getSlackId());
 
-                    sendSlackNotificationToRabbitMQ(slackMessageDetailDTO);
+                    try {
+                        sendSlackNotificationToRabbitMQ(slackMessageDetailDTO);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        logger.error("Unable to send message to slack queue");
+
+                    }
                 }
             }
 
@@ -102,27 +113,27 @@ public class NotificationServiceImpl implements NotificationService {
 
 
 
-    private void sendSlackNotificationToRabbitMQ(SlackMessageDetailDTO slackMessageDetailDTO) {
+    private void sendSlackNotificationToRabbitMQ(SlackMessageDetailDTO slackMessageDetailDTO) throws JsonProcessingException {
         ObjectMapper mapper = new ObjectMapper();
         String slackMessageDetailsDTOString;
         try {
             slackMessageDetailsDTOString = mapper.writeValueAsString(slackMessageDetailDTO);
+            amqpTemplate.convertAndSend(RabbitmqConstants.EXCHANGE_NAME, RabbitmqConstants.SLACK_ROUTING_KEY, slackMessageDetailsDTOString);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+            throw e;
         }
-        amqpTemplate.convertAndSend(RabbitmqConstants.EXCHANGE_NAME, RabbitmqConstants.SLACK_ROUTING_KEY, slackMessageDetailsDTOString);
     }
 
-    private void sendEmailToRabbitMq(EmailDetailsDTO emailDetailsDTO) {
+    private void sendEmailToRabbitMq(EmailDetailsDTO emailDetailsDTO) throws JsonProcessingException {
         ObjectMapper mapper= new ObjectMapper();
         String emailDetailsDTOString;
         try {
             emailDetailsDTOString = mapper.writeValueAsString(emailDetailsDTO);
+            amqpTemplate.convertAndSend(
+                    RabbitmqConstants.EXCHANGE_NAME    , RabbitmqConstants.EMAIL_ROUTING_KEY, emailDetailsDTOString);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+            throw e;
         }
-        amqpTemplate.convertAndSend(
-                RabbitmqConstants.EXCHANGE_NAME    , RabbitmqConstants.EMAIL_ROUTING_KEY, emailDetailsDTOString);
 
     }
 

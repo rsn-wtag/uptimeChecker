@@ -2,6 +2,7 @@ package com.example.uptimeChecker.Component;
 
 import com.example.uptimeChecker.DTO.UptimeStatusDTO;
 import com.example.uptimeChecker.Entities.Downtime;
+import com.example.uptimeChecker.Service.NotificationServiceImpl;
 import com.example.uptimeChecker.Service.WebsiteService;
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import com.example.uptimeChecker.Service.DowntimeService;
@@ -10,6 +11,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -24,6 +27,8 @@ import java.util.concurrent.*;
 
 @Component
 public class CheckUptime {
+    private static final Logger logger = LoggerFactory.getLogger(CheckUptime.class);
+
     private static final Map<Integer, WebsiteDetailsDTO> scheduledTasksMap = new ConcurrentHashMap<>();
     private static final Set<Integer> tasksToBeCanceled= new HashSet<>();
     private List<WebsiteDetailsDTO> urlList = new ArrayList<>();
@@ -193,7 +198,6 @@ public class CheckUptime {
             //Save downtime info and Send notification only once when consecutive fail count reaches max fail count
             //then we assume the website is down
             if(websiteDetailsDTOFromMap.getTotalConsecutiveFailCount()==maxFailCount){
-
                 notificationService.sendMessageToUsers(websiteDetailsDTO);
             }
             //when consecutive fail count exceed the max fail count broadcast down notification(websocket)
@@ -244,10 +248,12 @@ public class CheckUptime {
         String payload;
         try {
              payload= mapper.writeValueAsString(uptimeStatusDTO);
+            this.brokerMessagingTemplate.convertAndSend(destination, payload);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
+            logger.error("Unable to broad cast uptime info");
         }
-        this.brokerMessagingTemplate.convertAndSend(destination, payload);
+
     }
 
 

@@ -49,7 +49,7 @@ public class WebsiteUserController {
     }
 
     @DeleteMapping(RestEndpoints.REMOVE_WEBSITE)
-    public ResponseEntity<?> removeWebsite(@PathVariable Integer webId){
+    public ResponseEntity<Void> removeWebsite(@PathVariable Integer webId){
         UserDetailsImpl userDetails=(UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         websiteUserService.removeWebsite(userDetails.getUserId(),webId);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
