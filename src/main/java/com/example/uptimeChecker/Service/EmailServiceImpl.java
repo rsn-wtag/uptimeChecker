@@ -1,23 +1,17 @@
 package com.example.uptimeChecker.Service;
 
 
-
-
-import java.io.File;
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.internet.MimeMessage;
-
-
 import com.example.uptimeChecker.DTO.EmailDetailsDTO;
-import com.example.uptimeChecker.Exceptions.CustomException;
+import com.example.uptimeChecker.DTO.UserDTO;
+import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+
+import javax.mail.MessagingException;
+import javax.mail.internet.MimeMessage;
 
 // Annotation
 @Service
@@ -31,29 +25,25 @@ public class EmailServiceImpl implements EmailService {
     private String sender;
 
 
-    public String sendMail(EmailDetailsDTO details)
-    {
-        try {
+    public void sendMail(EmailDetailsDTO details) throws MessagingException {
+        MimeMessage mimeMessage=javaMailSender.createMimeMessage();
+        MimeMessageHelper mimeMessageHelper= new MimeMessageHelper(mimeMessage, true);
 
-            MimeMessage mimeMessage=javaMailSender.createMimeMessage();
-            MimeMessageHelper mimeMessageHelper= new MimeMessageHelper(mimeMessage, true);
+        mimeMessageHelper.setText("",details.getMsgBody());
+        mimeMessageHelper.setFrom(sender);
+        mimeMessageHelper.setTo(details.getRecipient());
+        mimeMessageHelper.setSubject(details.getSubject());
 
-            mimeMessageHelper.setText("",details.getMsgBody());
-            mimeMessageHelper.setFrom(sender);
-            mimeMessageHelper.setTo(details.getRecipient());
-            mimeMessageHelper.setSubject(details.getSubject());
+        javaMailSender.send(mimeMessage);
 
-
-            javaMailSender.send(mimeMessage);
-            return "Mail Sent Successfully...";
-        }
-
-
-        catch (Exception e) {
-            throw new CustomException(e.getMessage(), "error.email.sending");
-        }
     }
 
-
+    @Override
+    public String createEmailBody(UserDTO user, WebsiteDetailsDTO websiteDetailsDTO){
+        return  "<p>Hello "+user.getUserName()+"</p>"+
+                "<p>Your registered website at Uptime Checker is Down.</p>"+
+                "<p> <a href='"+websiteDetailsDTO.getUrl()+"'> "+websiteDetailsDTO.getUrl()+"</a> </p>"+
+                " <p>Sincerely,<br>The Uptime Checker Team</p>";
+    }
 
 }

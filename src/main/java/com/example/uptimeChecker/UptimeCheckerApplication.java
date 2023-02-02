@@ -1,5 +1,6 @@
 package com.example.uptimeChecker;
 
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -16,5 +17,6 @@ public class UptimeCheckerApplication {
 	public void init(){
 		// Setting Spring Boot SetTimeZone
 		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+
 	}
 }

@@ -1,10 +1,11 @@
 package com.example.uptimeChecker.Component;
 
 import com.example.uptimeChecker.DTO.UptimeStatusDTO;
+import com.example.uptimeChecker.Entities.Downtime;
 import com.example.uptimeChecker.Service.WebsiteService;
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import com.example.uptimeChecker.Service.DowntimeService;
-import com.example.uptimeChecker.Service.EmailNotificationService;
+import com.example.uptimeChecker.Service.NotificationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -17,21 +18,20 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
 
 @Component
 public class CheckUptime {
-    private static Map<Integer, WebsiteDetailsDTO> scheduledTasksMap = new ConcurrentHashMap<>();
-    private static Set<Integer> tasksToBeCanceled= new HashSet<>();
+    private static final Map<Integer, WebsiteDetailsDTO> scheduledTasksMap = new ConcurrentHashMap<>();
+    private static final Set<Integer> tasksToBeCanceled= new HashSet<>();
     private List<WebsiteDetailsDTO> urlList = new ArrayList<>();
-    private CustomThreadPoolTaskScheduler schedulerExecutorService;
+    private CustomThreadPoolTaskScheduler checkWebsiteSchedulerExecutorService;
     /*
      * this executor service is responsible to reschedule task and also schedule task for all website at application init
      * */
-    private ExecutorService reschedulerExecutorService;
+    private ExecutorService sentToSchedulerExecutorService;
     @Autowired
     private SimpMessagingTemplate brokerMessagingTemplate;
     @Autowired
@@ -40,19 +40,20 @@ public class CheckUptime {
     private DowntimeService downtimeService;
 
     @Autowired
-    private EmailNotificationService emailNotificationService;
+    private NotificationService notificationService;
+
     @Autowired
     DowntimeSummaryManagementComponent downtimeSummaryManagementComponent;
-    private Integer schedulerPeriod;
-    private Integer maxFailCount;
+    private final  Integer schedulerPeriod;
+    private final Integer maxFailCount;
 
-    private  TimeUnit timeUnit;
+    private  final TimeUnit timeUnit;
     public CheckUptime(  @Value("${rescheduler.poolsize}") String reschedulerPoolSize,
                          @Value("${scheduler.poolsize}") String schedulerPoolSize,
                          @Value("${scheduler.period}") String  schedulerPeriod,
                          @Value("${max.fail.count}" ) String maxFailCount){
-         schedulerExecutorService = new CustomThreadPoolTaskScheduler(Integer.parseInt(schedulerPoolSize));
-         reschedulerExecutorService = Executors.newFixedThreadPool(Integer.parseInt(reschedulerPoolSize));
+         checkWebsiteSchedulerExecutorService = new CustomThreadPoolTaskScheduler(Integer.parseInt(schedulerPoolSize));
+         sentToSchedulerExecutorService = Executors.newFixedThreadPool(Integer.parseInt(reschedulerPoolSize));
          this.schedulerPeriod=Integer.parseInt(schedulerPeriod);
          this.maxFailCount=Integer.parseInt(maxFailCount);
          this.timeUnit=TimeUnit.SECONDS;
@@ -62,12 +63,14 @@ public class CheckUptime {
     @PostConstruct
     public void init() {
         try {
-            if(downtimeSummaryManagementComponent.executeEndOfDayTaskForMissedScheduler()) {
-                //if the schedule is missed that method will update the summary table,
-                // so no need to update end time in downtime table
-                updateEndOfDowntime();
+            if(websiteService.isAnyWebsiteExists()){
+                if(!downtimeSummaryManagementComponent.executeEndOfDayTaskForMissedScheduler()) {
+                    //if the schedule is missed that method will update the summary table,
+                    // so no need to update end time in downtime table
+                    updateEndOfDowntime();
+                }
+                scheduleWebsiteUptimeCheckTasks();
             }
-            broadcastWebsiteUptimeData();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -85,34 +88,41 @@ public class CheckUptime {
     * */
     public void addForExecution(WebsiteDetailsDTO websiteDetailsDTO) {
         //if tasksToBeCanceled contains the webId that means the website is removed from the system. so, we won't reschedule it
-        if(!tasksToBeCanceled.contains(websiteDetailsDTO.getWebId()))
-        reschedulerExecutorService.execute(() -> {
-            int delay = calculateBackOffTime(websiteDetailsDTO.getFailCount());
-            System.out.println(delay + "delay");
-            schedulerExecutorService.scheduleAtFixedRate(() -> {
-                checkAvailability(websiteDetailsDTO);
-            }, delay, this.schedulerPeriod, timeUnit, websiteDetailsDTO.getWebId(), websiteDetailsDTO.getUrl());
-        });
+        if(!tasksToBeCanceled.contains(websiteDetailsDTO.getWebId())){
+            sentToSchedulerExecutorService.execute(() -> {
+                int delay = calculateBackOffTime(websiteDetailsDTO.getFailCount());
+                System.out.println(delay + "delay");
+                checkWebsiteSchedulerExecutorService.scheduleAtFixedRate(() -> {
+                    checkAvailability(websiteDetailsDTO);
+                }, delay, this.schedulerPeriod, timeUnit, websiteDetailsDTO.getWebId(), websiteDetailsDTO.getUrl());
+            });
+        }else{
+            //remove from tasksToBeCanceled as its already canceled and also have been saved from being rescheduled.
+            tasksToBeCanceled.remove(websiteDetailsDTO.getWebId());
+        }
 
     }
 
     public void cancelTask(Integer webId){
         WebsiteDetailsDTO websiteDetailsDTO= scheduledTasksMap.get(webId);
        if(websiteDetailsDTO !=null){
-           //if website is schduled for check up then simply cancel it
-           websiteDetailsDTO.getFuture().cancel(false);
-       }else{
-           //else add it to tasksToBeCanceled set for rescheduler to know this website should not be rescheduled
-           tasksToBeCanceled.add(webId);
-      }
+          if( !websiteDetailsDTO.getFuture().isCancelled()){
+              //if website is scheduled for check up and not canceled for reschedule then simply cancel it
+              websiteDetailsDTO.getFuture().cancel(false);
+          }
+           scheduledTasksMap.remove(webId);
+       }
+       //after all this caution if the website reaches addForExecution method,
+       // then to restrict that website to be again scheduled, add it to tasksToBeCanceled queue
+        tasksToBeCanceled.add(webId);
     }
     //endregion
 
     //region private
-    private void broadcastWebsiteUptimeData() throws InterruptedException {
+    private void scheduleWebsiteUptimeCheckTasks() throws InterruptedException {
         getUserRegisteredWebsiteList();
-        for (int i = 0; i < urlList.size(); i++) {
-            addForExecution(urlList.get(i));
+        for (WebsiteDetailsDTO websiteDetailsDTO : urlList) {
+            addForExecution(websiteDetailsDTO);
         }
     }
     /*
@@ -127,35 +137,17 @@ public class CheckUptime {
             httpURLConnection.setConnectTimeout(1000);
             int responseCode = httpURLConnection.getResponseCode();
             if (responseCode >= 200 && responseCode < 400) {
-                System.out.println("connection up......" + websiteDetailsDTO.getUrl());
-                WebsiteDetailsDTO websiteDetailsDTOFromMap= scheduledTasksMap.get(websiteDetailsDTO.getWebId());
-                if ( websiteDetailsDTOFromMap != null) {
-                    if(websiteDetailsDTOFromMap.getTotalConsecutiveFailCount()>0){
-                        //updating Downtime end time value when website is up again after failure
-                        downtimeService.updateDowntimeInfo(websiteDetailsDTOFromMap);
-                    }
-
-                    websiteDetailsDTOFromMap.setFailCount(0);// resetting fail count
-                    websiteDetailsDTOFromMap.setTotalConsecutiveFailCount(0);//resetting consecutive total fail count
-
-                    System.out.println(scheduledTasksMap.get(websiteDetailsDTO.getWebId()).getFuture().getDelay(timeUnit));
-                }
-                broadcastData(websiteDetailsDTO, false);
+                onWebsiteUp(websiteDetailsDTO);
                 return true;
             } else {
-                System.out.println("connection down....");
-                reschedule(websiteDetailsDTO.getWebId());
-                broadcastData( websiteDetailsDTO, true);
-
+                onWebsiteDown(websiteDetailsDTO);
                 return false;
             }
 
-
         } catch (Exception e) {
             System.out.println("in exception..." + websiteDetailsDTO.getUrl());
-            reschedule(websiteDetailsDTO.getWebId());
             try {
-                broadcastData(websiteDetailsDTO,true);
+                onWebsiteDown(websiteDetailsDTO);
             } catch (InterruptedException ex) {
                 throw new RuntimeException(ex);
             }
@@ -165,35 +157,98 @@ public class CheckUptime {
         return true;
     }
 
+
+
+    private void onWebsiteUp(WebsiteDetailsDTO websiteDetailsDTO) throws InterruptedException {
+        System.out.println("connection up......" + websiteDetailsDTO.getUrl());
+        WebsiteDetailsDTO websiteDetailsDTOFromMap= scheduledTasksMap.get(websiteDetailsDTO.getWebId());
+        if ( websiteDetailsDTOFromMap != null) {
+            if(websiteDetailsDTOFromMap.getTotalConsecutiveFailCount()>maxFailCount){
+                //updating Downtime end time value when website is up again after failure
+                Downtime downtime= downtimeService.updateDowntimeInfo(websiteDetailsDTOFromMap);
+                websiteDetailsDTOFromMap.setDowntimeId(downtime.getDownTimeId());
+            }
+
+            websiteDetailsDTOFromMap.setFailCount(0);// resetting fail count
+            websiteDetailsDTOFromMap.setTotalConsecutiveFailCount(0);//resetting consecutive total fail count
+
+            System.out.println(scheduledTasksMap.get(websiteDetailsDTO.getWebId()).getFuture().getDelay(timeUnit));
+        }
+        broadcastData(websiteDetailsDTO, false);
+    }
+
+
+    private void onWebsiteDown(WebsiteDetailsDTO websiteDetailsDTO) throws InterruptedException {
+        if (scheduledTasksMap.get(websiteDetailsDTO.getWebId()) != null) {
+            WebsiteDetailsDTO websiteDetailsDTOFromMap = scheduledTasksMap.get(websiteDetailsDTO.getWebId());
+            Integer prevFailCount = websiteDetailsDTOFromMap.getFailCount();
+            Integer prevTotalConsecutiveFailCount = websiteDetailsDTOFromMap.getTotalConsecutiveFailCount();
+            websiteDetailsDTOFromMap.setTotalConsecutiveFailCount(prevTotalConsecutiveFailCount + 1);
+            websiteDetailsDTOFromMap.setFailCount(prevFailCount + 1);
+            try {
+                websiteDetailsDTO= (WebsiteDetailsDTO) websiteDetailsDTOFromMap.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new RuntimeException(e);
+            }
+            //Save downtime info and Send notification only once when consecutive fail count reaches max fail count
+            //then we assume the website is down
+            if(websiteDetailsDTOFromMap.getTotalConsecutiveFailCount()==maxFailCount){
+
+                notificationService.sendMessageToUsers(websiteDetailsDTO);
+            }
+            //when consecutive fail count exceed the max fail count broadcast down notification(websocket)
+            if(websiteDetailsDTOFromMap.getTotalConsecutiveFailCount()>=maxFailCount){
+                broadcastData( websiteDetailsDTO, true);
+            }
+            //if fail count reached max fail count we assume it to be  down, and we reset the fail count
+            if(websiteDetailsDTOFromMap.getFailCount()==maxFailCount){
+                websiteDetailsDTOFromMap.setFailCount(0);
+                Downtime downtime= downtimeService.saveDowntimeInfo(websiteDetailsDTO);
+                websiteDetailsDTOFromMap.setDowntimeId(downtime.getDownTimeId());
+            }
+            //after updating all required parameters of map item call the reschedule
+            reschedule(websiteDetailsDTO.getWebId());
+        }
+
+    }
+
+
     private void reschedule(Integer websiteId) {
         if (scheduledTasksMap.get(websiteId) != null) {
             WebsiteDetailsDTO websiteDetailsDTOFromMap = scheduledTasksMap.get(websiteId);
 
             ScheduledFuture<?> future = websiteDetailsDTOFromMap.getFuture();
-            Integer prevFailCount = websiteDetailsDTOFromMap.getFailCount();
-            Integer prevTotalConsecutiveFailCount = websiteDetailsDTOFromMap.getTotalConsecutiveFailCount();
-            websiteDetailsDTOFromMap.setTotalConsecutiveFailCount(prevTotalConsecutiveFailCount + 1);
-            websiteDetailsDTOFromMap.setFailCount(prevFailCount + 1);
-            future.cancel(false);
+            if(!future.isCancelled()){
+                future.cancel(false);
 
-            try {
-                WebsiteDetailsDTO websiteDetailsDTO= (WebsiteDetailsDTO) websiteDetailsDTOFromMap.clone();
-                //if fail count reached max fail count we assume it to be  down
-                if(websiteDetailsDTOFromMap.getFailCount()>=maxFailCount){
-                    websiteDetailsDTOFromMap.setFailCount(0);
-                    websiteDetailsDTO.setFailCount(0);
-                    downtimeService.saveDowntimeInfo(websiteDetailsDTO);
-                    emailNotificationService.sendMessageToUsers(websiteDetailsDTO);
+                try {
+                    WebsiteDetailsDTO websiteDetailsDTO= (WebsiteDetailsDTO) websiteDetailsDTOFromMap.clone();
+
+                    addForExecution(websiteDetailsDTO);
+
+                } catch (CloneNotSupportedException e) {
+                    throw new RuntimeException(e);
                 }
-
-                addForExecution(websiteDetailsDTO);
-
-            } catch (CloneNotSupportedException e) {
-                throw new RuntimeException(e);
             }
+
         }
     }
 
+
+    private void broadcastData(WebsiteDetailsDTO websiteDetailsDTO, boolean isDown)  {
+        String destination="/dashboard/data/"+websiteDetailsDTO.getWebId();
+        UptimeStatusDTO uptimeStatusDTO= new UptimeStatusDTO(isDown,websiteDetailsDTO.getUrl(), new Date(), websiteDetailsDTO.getWebId());
+        ObjectMapper mapper =  JsonMapper.builder()
+                .addModule(new JavaTimeModule())
+                .build();
+        String payload;
+        try {
+             payload= mapper.writeValueAsString(uptimeStatusDTO);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        this.brokerMessagingTemplate.convertAndSend(destination, payload);
+    }
 
 
     /*
@@ -207,27 +262,10 @@ public class CheckUptime {
     private Integer calculateBackOffTime(int failCount) {
         if (failCount == 0) return 0;
         else{
-            failCount=failCount-1;
+           // failCount=failCount-1;
             return (int) (schedulerPeriod*Math.pow(2,failCount));
         }
 
-    }
-
-
-
-    private void broadcastData(WebsiteDetailsDTO websiteDetailsDTO, boolean isDown) throws InterruptedException {
-        String destination="/dashboard/data/"+websiteDetailsDTO.getWebId();
-        UptimeStatusDTO uptimeStatusDTO= new UptimeStatusDTO(isDown,websiteDetailsDTO.getUrl(), new Date(), websiteDetailsDTO.getWebId());
-        ObjectMapper mapper =  JsonMapper.builder()
-                .addModule(new JavaTimeModule())
-                .build();
-        String payload="";
-        try {
-             payload= mapper.writeValueAsString(uptimeStatusDTO);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-        this.brokerMessagingTemplate.convertAndSend(destination, payload);
     }
     //endregion
 
@@ -246,7 +284,7 @@ public class CheckUptime {
             ScheduledFuture<?> future = super.scheduleAtFixedRate(command, initialDelay, period, unit);
 
             if (scheduledTasksMap.get(id) == null) {
-                WebsiteDetailsDTO websiteDetailsDTO = new WebsiteDetailsDTO(id, url, future, 0,0);
+                WebsiteDetailsDTO websiteDetailsDTO = new WebsiteDetailsDTO(id, url, future);
                 scheduledTasksMap.put(id, websiteDetailsDTO);
             } else {
                 scheduledTasksMap.get(id).setFuture(future);

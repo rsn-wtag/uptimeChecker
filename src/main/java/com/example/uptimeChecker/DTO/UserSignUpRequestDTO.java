@@ -3,7 +3,7 @@ package com.example.uptimeChecker.DTO;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
+import javax.validation.constraints.NotNull;
 
 import javax.validation.constraints.Email;
 import javax.validation.constraints.Pattern;
@@ -12,9 +12,9 @@ import javax.validation.constraints.Pattern;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserSignUpRequestDTO {
-    @NonNull
+    @NotNull
     private String username;
-    @NonNull
+    @NotNull
     private char[] password;
     @Email(message="Please provide a valid email address")
     @Pattern(regexp=".+@.+\\..+", message="Please provide a valid email address")

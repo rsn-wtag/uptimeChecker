@@ -3,18 +3,33 @@ package com.example.uptimeChecker.Service;
 import com.example.uptimeChecker.DTO.DownTimeDTO;
 import com.example.uptimeChecker.DTO.DownTimeSummaryDTO;
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
+import com.example.uptimeChecker.Entities.Downtime;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Set;
+import java.math.BigInteger;
+import java.time.OffsetTime;
+import java.util.Date;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public interface DowntimeService {
 
-    public void saveDowntimeInfo(WebsiteDetailsDTO websiteDetailsDTO);
+     Downtime saveDowntimeInfo(WebsiteDetailsDTO websiteDetailsDTO);
 
-    public void updateDowntimeInfo(WebsiteDetailsDTO websiteDetailsDTO);
+     Downtime updateDowntimeInfo(WebsiteDetailsDTO websiteDetailsDTO);
 
     void updateEndOfDowntime(TimeUnit timeUnit, Integer period);
 
-    Set<DownTimeSummaryDTO> getDayWiseDownTimeHistory(Integer webId);
-    Set<DownTimeDTO> getTodayDownTimeHistory(Integer webId);
+    List<DownTimeSummaryDTO> getDayWiseDownTimeHistory(Integer webId);
+    List<DownTimeDTO> getTodayDownTimeHistory(Integer webId);
+
+    List<BigInteger> getDowntimeIdsToBeUpdatedAtEOD(Date currentDate);
+
+    @Transactional
+    void updateDownTimeAtEOD(BigInteger downtimeId, OffsetTime todayEndTime, OffsetTime nextDayStartTime, Date nextDate);
+
+    @Transactional
+    void ExportToFileAndDeletePreviousDayDateForEOD(Integer webId, Date date);
+
+    String exportToCSVFile(Date date) ;
 }

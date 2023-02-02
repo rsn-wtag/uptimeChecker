@@ -5,5 +5,8 @@ import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import java.util.List;
 
 public interface WebsiteService {
-    public List<WebsiteDetailsDTO> getWesiteDetailList();
+    List<WebsiteDetailsDTO> getWesiteDetailList();
+
+
+    boolean isAnyWebsiteExists();
 }

@@ -1,16 +1,13 @@
 package com.example.uptimeChecker.Repositories;
 
-import com.example.uptimeChecker.Entities.User;
 import com.example.uptimeChecker.Entities.WebsiteDetails;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
-
-import java.util.Set;
 
 @Repository
 public interface WebsiteDetailsRepository extends JpaRepository<WebsiteDetails, Integer> {
     public WebsiteDetails findByUrl(String url);
+
 
   /*  @Query(value = "SELECT " +
             "new com.example.uptimeChecker.Entities.User(u.userName, u.password , u.enabled  , u.email, u.slackId  ) " +

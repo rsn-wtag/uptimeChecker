@@ -30,6 +30,11 @@ public class WebsiteServiceImpl implements WebsiteService {
 
         return websiteDetailsDTOList;
     }
+    @Override
+    public boolean isAnyWebsiteExists(){
+       return websiteDetailsRepository.count()>0;
+
+    }
     private JMapper getWebsiteDetailsDTOMapper() {
         JMapperAPI jmapperApi = new JMapperAPI()
                 .add(mappedClass(WebsiteDetailsDTO.class)
@@ -44,7 +49,10 @@ public class WebsiteServiceImpl implements WebsiteService {
                 .add(mappedClass(WebsiteDetails.class)
                         .add(attribute("webId").value("webId"))
                         .add(attribute("url").value("url")));
-        JMapper<WebsiteDetails, WebsiteDetailsDTO> mapper = new JMapper<>(WebsiteDetails.class, WebsiteDetailsDTO.class, jmapperApi);
-        return mapper;
+        return new JMapper<>(WebsiteDetails.class, WebsiteDetailsDTO.class, jmapperApi);
+
     }
+
+
+
 }

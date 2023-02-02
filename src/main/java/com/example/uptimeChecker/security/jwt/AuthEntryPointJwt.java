@@ -26,11 +26,11 @@ public class AuthEntryPointJwt implements AuthenticationEntryPoint {
     Environment environment;
 
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException {
         logger.error("Unauthorized error: {}", authException.getMessage());
         ObjectMapper mapper= new ObjectMapper();
       //  response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Error: Unauthorized");
-        ErrorMessage errorMessage= new ErrorMessage(HttpServletResponse.SC_UNAUTHORIZED, new Date(), authException.getMessage(),
+        ErrorMessage errorMessage= new ErrorMessage( new Date(), authException.getMessage(),
                 environment.getProperty("error.security.unauthorized"));
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.getWriter().write(mapper.writeValueAsString(errorMessage));

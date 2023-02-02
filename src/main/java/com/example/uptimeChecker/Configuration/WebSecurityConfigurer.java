@@ -76,7 +76,7 @@ public class WebSecurityConfigurer {
                 .exceptionHandling().authenticationEntryPoint(authEntryPointJwt).and()
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
                 .authorizeRequests().antMatchers("/auth/**").permitAll()
-                .antMatchers("/ws/**").permitAll()
+              //  .antMatchers("/ws/**").permitAll()
                 .anyRequest().authenticated();
 
         http.authenticationProvider(authenticationProvider());
@@ -91,7 +91,7 @@ public class WebSecurityConfigurer {
     public HttpFirewall getHttpFirewall() {
         StrictHttpFirewall strictHttpFirewall = new StrictHttpFirewall();
         strictHttpFirewall.setAllowUrlEncodedDoubleSlash(true);
-        strictHttpFirewall.setAllowedHttpMethods(Arrays.asList("GET","POST","DELETE", "OPTIONS"));
+        strictHttpFirewall.setAllowedHttpMethods(Arrays.asList("GET","POST","DELETE","PATCH","PUT", "OPTIONS"));
         return strictHttpFirewall;
     }
 }

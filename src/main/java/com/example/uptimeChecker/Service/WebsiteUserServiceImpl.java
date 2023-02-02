@@ -1,27 +1,26 @@
 package com.example.uptimeChecker.Service;
 
-import com.example.uptimeChecker.Component.CheckUptime;
-import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
-import com.example.uptimeChecker.DTO.WebsiteDetailsWithMetaDataDTO;
+import com.example.uptimeChecker.DTO.*;
 import com.example.uptimeChecker.Entities.User;
 import com.example.uptimeChecker.Entities.WebsiteDetails;
 import com.example.uptimeChecker.Entities.WebsiteUserMetaData;
 import com.example.uptimeChecker.Entities.WebsiteUserMetaData_PK;
 import com.example.uptimeChecker.Exceptions.CustomException;
 import com.example.uptimeChecker.Exceptions.ResourceNotFoundException;
+import com.example.uptimeChecker.Exceptions.UnprocessableEntityException;
 import com.example.uptimeChecker.Repositories.UserRepository;
 import com.example.uptimeChecker.Repositories.WebsiteDetailsRepository;
 import com.example.uptimeChecker.Repositories.WebsiteUserMetaDataRepository;
-import org.hibernate.validator.internal.constraintvalidators.bv.EmailValidator;
+import com.example.uptimeChecker.Enums.WebsiteChangeType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.servlet.http.HttpServletResponse;
 import java.util.*;
-
+import java.util.concurrent.BlockingQueue;
 
 
 @Service
@@ -37,15 +36,13 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
     UserRepository userRepository;
 
     @Autowired
-    private CheckUptime checkUptime;
+    private BlockingQueue<WebsiteChangeInfoDTO> websiteChangeTrackerQueue;
 
 
     public Set<WebsiteDetailsWithMetaDataDTO> getWebsiteDetailsByUser(Integer userId) {
-
         Set<WebsiteDetailsWithMetaDataDTO> websiteSet= new HashSet<>();
         WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO;
 
-        try {
             Optional<User> optionalUser = userRepository.findById(userId);
 
             if (optionalUser.isPresent()) {
@@ -55,11 +52,9 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
                     websiteSet.add(websiteDetailsWithMetaDataDTO);
                 }
             } else {
-                throw new ResourceNotFoundException("Unable to find user");
+                throw new ResourceNotFoundException("user.not.found");
             }
-        } catch (Exception e) {
-            throw e;
-        }
+
         return websiteSet;
     }
 
@@ -77,11 +72,16 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
                     WebsiteDetails websiteDetails= websiteDetailsOptional.get();
                     websiteDetailsRepository.delete(websiteDetails);
                     //also cancel the scheduled task
-                    checkUptime.cancelTask(webId);
+                  cancelTaskForRemovedWebsite(websiteDetails);
                 }
             }
 
         }
+    }
+    private void cancelTaskForRemovedWebsite(WebsiteDetails websiteDetails){
+        WebsiteDetailsDTO websiteDetailsDTO= new WebsiteDetailsDTO();
+        websiteDetailsDTO.setWebId(websiteDetails.getWebId());
+        websiteChangeTrackerQueue.add(new WebsiteChangeInfoDTO(WebsiteChangeType.DELETE,websiteDetailsDTO));
     }
 
     @Override
@@ -96,13 +96,14 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
             websiteDetailsWithMetaDataDTO.setWebsiteName(websiteUserMetaData.getWebsiteName());
             return websiteDetailsWithMetaDataDTO;
         }else{
-           throw new CustomException(null, "error.website.not.found",HttpServletResponse.SC_BAD_REQUEST);
+           throw new ResourceNotFoundException("error.website.not.found");
        }
     }
     @Override
     @Transactional
-    public String saveWebsite(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO, boolean isRegister) {
-
+    public void saveWebsite(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO, boolean isRegister) {
+        UserDetailsImpl userDetails=(UserDetailsImpl) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        websiteDetailsWithMetaDataDTO.setUserId(userDetails.getUserId());
         WebsiteDetails websiteDetails= new WebsiteDetails();
         WebsiteUserMetaData websiteUserMetaData;
         boolean isNewWebsite=true;
@@ -128,7 +129,8 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
             if( user.getMappedWebsiteDetails() !=null && isRegister){
                 //if user has some registered website check if this website is already mapped
                 if(websiteUserMetaDataRepository.findById(new WebsiteUserMetaData_PK(user.getUserId(), websiteDetails.getWebId())).isPresent())
-                    throw new CustomException(null, "error.already.registered", HttpStatus.BAD_REQUEST.value());
+                  throw new UnprocessableEntityException("error.already.registered");
+                  //  throw new CustomException( "error.already.registered", HttpStatus.BAD_REQUEST.value());
 
             }
             //else just save or update meta data
@@ -136,18 +138,22 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
 
             //if new website is registered then schedule task for it.
             if(isNewWebsite)
-                checkUptime.addForExecution(new WebsiteDetailsDTO(websiteDetails.getWebId(), websiteDetails.getUrl()));
-            return env.getProperty("success.register.website");
+                websiteChangeTrackerQueue.add(new WebsiteChangeInfoDTO(WebsiteChangeType.ADD,
+                        new WebsiteDetailsDTO(websiteDetails.getWebId(), websiteDetails.getUrl())));
         }else{
-            throw new CustomException(null, "error.userNotExists", HttpStatus.BAD_REQUEST.value());
+            throw new ResourceNotFoundException("error.userNotExists");
         }
 
     }
 
-
+    /*
+    * if the url of the website is updated then simply register new website and map it to user.
+    * otherwise just update the website user mapping with metadata
+    * */
     @Override
     @Transactional
     public void updateUserWebsiteInfo(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaDataDTO) {
+
         Optional<WebsiteUserMetaData> websiteUserMetaDataOptional= websiteUserMetaDataRepository.findById(
                 new WebsiteUserMetaData_PK(websiteDetailsWithMetaDataDTO.getUserId(),
                         websiteDetailsWithMetaDataDTO.getWebId()));
@@ -165,7 +171,22 @@ public class WebsiteUserServiceImpl implements WebsiteUserService {
             }
         }
     }
+    @Transactional
+    @Override
+    public Set<UserDTO> getUsersByWebsite(Integer webId) {
+        Optional<WebsiteDetails> websiteDetailsOptional= websiteDetailsRepository.findById(webId);
+        Set<UserDTO> userDTOSet= new HashSet<>();
+        if(websiteDetailsOptional.isPresent()){
+            WebsiteDetails websiteDetails= websiteDetailsOptional.get();
+            Set<WebsiteUserMetaData> websiteUserMetaDataSet= websiteDetails.getWebsiteUserMetaDataSet();
+            for(WebsiteUserMetaData websiteUserMetaData:websiteUserMetaDataSet){
+                User user=  websiteUserMetaData.getUser();
+                userDTOSet.add(new UserDTO(user.getUserId(), user.getUserName(), "", true, user.getEmail(), user.getSlackId()));
+            }
+        }
 
+        return userDTOSet;
+    }
     private static WebsiteUserMetaData convertToWebsiteDetailsMetaData(WebsiteDetailsWithMetaDataDTO websiteDetailsWithMetaData, WebsiteDetails websiteDetails) {
         WebsiteUserMetaData websiteUserMetaData;
         WebsiteUserMetaData_PK websiteUserMetaDataPk= new WebsiteUserMetaData_PK();

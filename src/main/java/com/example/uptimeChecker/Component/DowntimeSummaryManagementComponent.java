@@ -2,10 +2,13 @@ package com.example.uptimeChecker.Component;
 
 import com.example.uptimeChecker.DTO.WebsiteDetailsDTO;
 import com.example.uptimeChecker.Entities.*;
+import com.example.uptimeChecker.Enums.ProcessDayStatus;
 import com.example.uptimeChecker.Repositories.DowntimeRepository;
 import com.example.uptimeChecker.Repositories.DowntimeSummaryRepository;
+import com.example.uptimeChecker.Repositories.EndOfDayInfoRepository;
+import com.example.uptimeChecker.Repositories.EodProcessingDayRepository;
+import com.example.uptimeChecker.Service.DowntimeService;
 import com.example.uptimeChecker.Service.WebsiteService;
-import com.example.uptimeChecker.security.jwt.AuthEntryPointJwt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,17 +17,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.PostConstruct;
-import java.time.OffsetDateTime;
+import java.math.BigInteger;
+import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.time.OffsetTime;
-import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 
 @Component
 @EnableScheduling
-@Transactional
 public class DowntimeSummaryManagementComponent {
-    private static final Logger logger = LoggerFactory.getLogger(AuthEntryPointJwt.class);
+    private static final Logger logger = LoggerFactory.getLogger(DowntimeSummaryManagementComponent.class);
     @Autowired
     DowntimeSummaryRepository downtimeSummaryRepository;
 
@@ -33,91 +38,130 @@ public class DowntimeSummaryManagementComponent {
     @Autowired
     WebsiteService websiteService;
 
-    //todo: what if application was down at that time
+    @Autowired
+    DowntimeService downtimeService;
+
+    @Autowired
+    EodProcessingDayRepository eodProcessingDayRepository;
+
+    @Autowired
+    EndOfDayInfoRepository endOfDayInfoRepository;
+
+
     //this whole task should be executed at db level with procedure, that would be better I think
     @Scheduled(cron = "0 0 0 * * *")//this method will be executed every day at 0:0:0
-//  @Scheduled(cron = "0 33 10 * * *")//test
+    //@Scheduled(cron = "0 31 11 * * *")//test
     public void executeEndOfDayTask(){
-      Calendar c= Calendar.getInstance();
-      Date nextDate= c.getTime();
-      c.add(Calendar.DATE, -1);
-      Date currentDate=  c.getTime();
-      OffsetTime todayEndTime=OffsetTime.now().withHour(23).withMinute(59).withSecond(59);
-      OffsetTime nextDayStartTime=OffsetTime.now().withHour(0).withMinute(0).withSecond(0);
+        Calendar c= Calendar.getInstance();
+        if( eodProcessingDayRepository.findById(1).isPresent()) {
+              Date currentDate = eodProcessingDayRepository.findAll().get(0).getNextProcessingDate();
+              c.setTime(currentDate);
+              c.add(Calendar.DATE, 1);
+              Date nextDate= c.getTime();
 
-        //get all of them whose end time is not yet updated.
-        //update their end time. and insert another row with tomorrow  and start time as 00:00:00
-        Set<Downtime> downtimeSet=  downtimeRepository.findByDateAndEndTimeGreaterThanStartTime(currentDate);
-        for(Downtime downtime:downtimeSet){
-            downtime= downtimeRepository.findById(downtime.getDownTimeId()).get();
-            //re checking if end of  downtime is updated or not
-            if(downtime.getEndTime()==null){
-                //if not then just set endtime to null for new row
-                downtime.setEndTime(todayEndTime);
-                downtimeRepository.save(downtime);
-                Downtime newDowntime= new Downtime(downtime.getWebId(), nextDayStartTime,nextDate,0);
-                downtimeRepository.save(newDowntime);
-            }else{
-                //if yes then insert new row with previous end time
-                OffsetTime endTime= downtime.getEndTime();
-                downtime.setEndTime(todayEndTime);
-                downtimeRepository.save(downtime);
-                Downtime newDowntime= new Downtime(downtime.getWebId(), nextDayStartTime,endTime,nextDate);
-                downtimeRepository.save(newDowntime);
-            }
+              OffsetTime todayEndTime=OffsetTime.now().withHour(23).withMinute(59).withSecond(59);
+              OffsetTime nextDayStartTime=OffsetTime.now().withHour(0).withMinute(0).withSecond(0);
+
+                //get all of them whose end time is not yet updated.
+                //update their end time. and insert another row with tomorrow  and start time as 00:00:00
+                List<BigInteger> downtimeIdSet= downtimeService.getDowntimeIdsToBeUpdatedAtEOD(currentDate);
+                for(BigInteger downtimeId:downtimeIdSet){
+                    downtimeService.updateDownTimeAtEOD(downtimeId, todayEndTime, nextDayStartTime, nextDate);
+                }
+
+                String fileName=downtimeService.exportToCSVFile(currentDate);
+                boolean deleteData=true;
+                if(fileName==null) {
+                    deleteData=false;
+                    logger.error("Error Occurred at CSV file generation for date "+ currentDate);
+                }
+                List<WebsiteDetailsDTO> websiteDetailsDTOList = websiteService.getWesiteDetailList();
+                for (WebsiteDetailsDTO websiteDetailsDTO : websiteDetailsDTOList) {
+                    try {
+                        if(!downtimeSummaryRepository.existsByDowntimeSummaryPk(new DowntimeSummary_PK(currentDate,websiteDetailsDTO.getWebId())))
+                        //for all website calculate and save summary in the summary table
+                        calculateAndSaveDowntimeSummary(websiteDetailsDTO.getWebId(), currentDate, deleteData);
+                    } catch (Exception e) {
+                        logger.error("Error Occurred at summary Calculation/data deletion for WebID " + websiteDetailsDTO.getWebId() + ", date: " + currentDate);
+                    }
+                }
+            updateEodInfo(currentDate, ProcessDayStatus.Success, fileName);
+        }else{
+            logger.error("Unable to process EOD. no processing date found ");
+
         }
 
-      List<WebsiteDetailsDTO> websiteDetailsDTOList=  websiteService.getWesiteDetailList();
-      for(WebsiteDetailsDTO websiteDetailsDTO:websiteDetailsDTOList){
-          try {
-              //for all website calculate and save summary in the summary table
-              calculateAndSaveDowntimeSummary(websiteDetailsDTO.getWebId(),currentDate);
-          }catch (Exception e){
-                logger.error("Error Occured at summary Calculation/data deletion for WebID "+websiteDetailsDTO.getWebId()+", date: "+currentDate);
-          }
-      }
     }
-
+    @Transactional
     public boolean executeEndOfDayTaskForMissedScheduler(){
-        Downtime lastDowntimeInfo=downtimeRepository.findFirstByOrderByDateDesc();
-       if ( lastDowntimeInfo!=null && !lastDowntimeInfo.getDate().equals(new Date())){
-           //if down time info has previous date data then scheduler has been missed
-         List<WebsiteDetailsDTO> websiteDetailsList= websiteService.getWesiteDetailList();
-          if(websiteDetailsList.size()>0){
-             downtimeRepository.updateAllNullEndTime(OffsetTime.now().withHour(23).withMinute(59).withSecond(59));
-              for( WebsiteDetailsDTO websiteDetailsDTO:websiteDetailsList){
-                  calculateAndSaveDowntimeSummary(websiteDetailsDTO.getWebId(), lastDowntimeInfo.getDate());
-              }
-          }
-          return true;
+       // Downtime lastDowntimeInfo=downtimeRepository.findFirstByOrderByDateDesc();
+       if( eodProcessingDayRepository.findById(1).isPresent()) {
+           Date processingDate = eodProcessingDayRepository.findAll().get(0).getNextProcessingDate();
+
+           SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+
+           if (processingDate != null && !sdf.format(processingDate).equals(sdf.format(new Date()))) {
+               //if down time info has previous date data then scheduler has been missed
+               List<WebsiteDetailsDTO> websiteDetailsList = websiteService.getWesiteDetailList();
+
+               downtimeRepository.updateAllNullEndTime(OffsetTime.now().withHour(23).withMinute(59).withSecond(59));
+               String fileName = downtimeService.exportToCSVFile(processingDate);
+               boolean deleteData=true;
+               if (fileName==null) {
+                   deleteData=false;
+                   logger.error("Error Occurred at CSV file generation for date " + processingDate);
+               }
+               for (WebsiteDetailsDTO websiteDetailsDTO : websiteDetailsList) {
+                   if(!downtimeSummaryRepository.existsByDowntimeSummaryPk(new DowntimeSummary_PK(processingDate,websiteDetailsDTO.getWebId())))
+                       calculateAndSaveDowntimeSummary(websiteDetailsDTO.getWebId(), processingDate, deleteData);
+               }
+
+               updateEodInfo(processingDate, ProcessDayStatus.Success, fileName);
+               return true;
+           }
        }
        return false;
     }
-    void calculateAndSaveDowntimeSummary(Integer webId, Date date){
-      Set<Downtime> DowntimeSet= downtimeRepository.findByDateAndWebId(date, webId);
-      long downtimeInSecond =0;
-          //calculating total downtime
-          for(Downtime downtime:DowntimeSet){
-              if(downtime.getEndTime()!=null){
-                  downtimeInSecond= ((downtime.getEndTime().getSecond() - downtime.getStartTime().getSecond()))+ downtimeInSecond;
+    @Transactional
+    public void calculateAndSaveDowntimeSummary(Integer webId, Date date, boolean deleteData){
+
+          List<Downtime> DowntimeList= downtimeRepository.findByDateAndWebId(date, webId);
+          long downtimeInSecond =0;
+              //calculating total downtime
+              for(Downtime downtime:DowntimeList){
+                  if(downtime.getEndTime()!=null){
+                      downtimeInSecond=  Duration.between(downtime.getStartTime(), downtime.getEndTime()).getSeconds()+ downtimeInSecond;
+                  }
               }
-          }
-        DowntimeSummary downtimeSummary= new DowntimeSummary();
-        downtimeSummary.setDowntimeSummaryPk(new DowntimeSummary_PK(date,webId));
-        downtimeSummary.setTotalDownTime(downtimeInSecond);
-        downtimeSummary.setUptimePercentage(calculateUptimePercentage(downtimeInSecond));
-        downtimeSummaryRepository.save(downtimeSummary);
-        //delete all data for that day for that specific website.
-        deletePreviousDayDate(webId,date);
+            DowntimeSummary downtimeSummary= new DowntimeSummary();
+            downtimeSummary.setDowntimeSummaryPk(new DowntimeSummary_PK(date,webId));
+            downtimeSummary.setTotalDownTime(downtimeInSecond);
+            downtimeSummary.setUptimePercentage(calculateUptimePercentage(downtimeInSecond));
+            downtimeSummaryRepository.save(downtimeSummary);
+            if(deleteData)
+                //delete all data for that day for that specific website if data is successfully backed ip in csv file.
+                downtimeService.ExportToFileAndDeletePreviousDayDateForEOD(webId,date);
+
     }
 
-    private void deletePreviousDayDate(Integer webId, Date date){
-        downtimeRepository.deleteByWebIdAndDate(webId, date);
-    }
+
     private double calculateUptimePercentage(long downtimeInSecond){
         long totalSecondsInADay = 86400;
         double downtimePercentage= ((double)downtimeInSecond/(double)totalSecondsInADay)*100;
         return 100.00-downtimePercentage;
+    }
+
+    private void updateEodInfo(Date processedDate, ProcessDayStatus status, String backupFileName){
+        Optional<EodProcessingDay> eodProcessingDayOptional=eodProcessingDayRepository.findById(1);
+        if(eodProcessingDayOptional.isPresent()){
+            EodProcessingDay eodProcessingDay = eodProcessingDayOptional.get();
+            eodProcessingDay.setNextProcessingDate(new Date());
+            eodProcessingDayRepository.save(eodProcessingDay);
+
+            EndOfDayInfo endOfDayInfo = new EndOfDayInfo(processedDate, status, backupFileName);
+            endOfDayInfoRepository.save(endOfDayInfo);
+        }
+
     }
 
 }

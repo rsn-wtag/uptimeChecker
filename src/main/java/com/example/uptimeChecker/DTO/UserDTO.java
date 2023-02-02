@@ -4,8 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.persistence.Column;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,4 +14,11 @@ public class UserDTO {
     private Boolean enabled;
     private String email;
     private String slackId;
+
+    public UserDTO(Integer userId, UpdateUserDTO updateUserDTO) {
+        this.userId = userId;
+        this.userName=updateUserDTO.getUserName();
+        this.email=updateUserDTO.getEmail();
+        this.slackId=updateUserDTO.getSlackId();
+    }
 }

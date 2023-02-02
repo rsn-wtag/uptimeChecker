@@ -1,11 +1,10 @@
 package com.example.uptimeChecker.Configuration;
 
-import com.example.uptimeChecker.constants.RabbitmqConstants;
+import com.example.uptimeChecker.Constants.RabbitmqConstants;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Exchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,8 +13,15 @@ public class RabbitMqConfig {
 
 
     @Bean
-    public Queue createQueue(){
-        return new Queue(RabbitmqConstants.QUEUE_NAME,true);
+    public Queue createEmailQueue(){
+        return new Queue(RabbitmqConstants.EMAIL_QUEUE_NAME,true);
+
+    }
+
+    @Bean
+
+    public Queue createSlackQueue(){
+        return new Queue(RabbitmqConstants.SLACK_QUEUE_NAME,true);
 
     }
 
@@ -25,8 +31,13 @@ public class RabbitMqConfig {
 
     }
     @Bean
-    public Binding createBinding(){
-        return new Binding(RabbitmqConstants.QUEUE_NAME, Binding.DestinationType.QUEUE, RabbitmqConstants.EXCHANGE_NAME, RabbitmqConstants.ROUTING_KEY,null);
+    public Binding createEmailQueueBinding(){
+        return new Binding(RabbitmqConstants.EMAIL_QUEUE_NAME, Binding.DestinationType.QUEUE, RabbitmqConstants.EXCHANGE_NAME, RabbitmqConstants.EMAIL_ROUTING_KEY,null);
+    }
+
+    @Bean
+    public Binding createSlackQueueBinding(){
+        return new Binding(RabbitmqConstants.SLACK_QUEUE_NAME, Binding.DestinationType.QUEUE, RabbitmqConstants.EXCHANGE_NAME, RabbitmqConstants.SLACK_ROUTING_KEY,null);
     }
 
 }

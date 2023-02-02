@@ -1,5 +1,6 @@
 package com.example.uptimeChecker.Entities;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -12,6 +13,7 @@ import java.util.Date;
 @Table(name = "downtime_info")
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 public class Downtime {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,10 +42,11 @@ public class Downtime {
         this.totalFailCount=totalFailCount;
     }
 
-    public Downtime(Integer webId, OffsetTime startTime, OffsetTime endTime, Date date) {
+    public Downtime(Integer webId, OffsetTime startTime, OffsetTime endTime, Date date, Integer totalFailCount) {
         this.webId = webId;
         this.startTime = startTime;
         this.endTime = endTime;
         this.date=date;
+        this.totalFailCount=totalFailCount;
     }
 }
