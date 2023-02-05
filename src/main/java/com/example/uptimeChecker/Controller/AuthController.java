@@ -80,7 +80,7 @@ public class AuthController {
             }
 
             if (request.getCookies() != null) {
-                System.out.println("i found some cookies");
+
                 for (Cookie cookie : request.getCookies()) {
                     if(cookie.getName().equals(cookieName)){
                         cookie.setMaxAge(0);

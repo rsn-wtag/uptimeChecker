@@ -40,7 +40,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public String createEmailBody(UserDTO user, WebsiteDetailsDTO websiteDetailsDTO){
-        return  "<p>Hello "+user.getUserName()+"</p>"+
+        return  "<p>Hello "+user.getUserName()+", </p>"+
                 "<p>Your registered website at Uptime Checker is Down.</p>"+
                 "<p> <a href='"+websiteDetailsDTO.getUrl()+"'> "+websiteDetailsDTO.getUrl()+"</a> </p>"+
                 " <p>Sincerely,<br>The Uptime Checker Team</p>";

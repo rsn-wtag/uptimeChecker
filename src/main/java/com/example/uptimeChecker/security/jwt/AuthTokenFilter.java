@@ -16,6 +16,7 @@ import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Optional;
 
 public class AuthTokenFilter extends OncePerRequestFilter {
     @Autowired
@@ -57,9 +58,9 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     }
 
     private String parseJwtFromCookie(HttpServletRequest request){
-        Cookie[] cookies= request.getCookies();
-
-        for(Cookie cookie: cookies){
+        Optional<Cookie[]> cookies= Optional.of( request.getCookies());
+        if(cookies.isPresent())
+        for(Cookie cookie: cookies.get()){
             if(cookie.getName().equals(cookieName))
                 return cookie.getValue();
         }
